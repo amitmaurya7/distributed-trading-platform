@@ -83,6 +83,4 @@ distributed-trading-platform/
 ├── docs/
 ├── docker-compose.yml
 ├── README.md
-└── .gitignore
-```
-
+└── .gitignore 
