@@ -1,0 +1,82 @@
+pipeline {
+    agent any
+
+    options {
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+        timeout(time: 20, unit: 'MINUTES')
+        skipDefaultCheckout(true)
+    }
+
+    environment {
+        SERVICE_DIR = 'services/user-service'
+        MAVEN_OPTS = '-Duser.timezone=UTC'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+
+                script {
+                    env.SHORT_COMMIT = sh(
+                        script: 'git rev-parse --short HEAD',
+                        returnStdout: true
+                    ).trim()
+                }
+
+                echo "Branch: ${env.BRANCH_NAME ?: 'SCM configured branch'}"
+                echo "Commit: ${env.SHORT_COMMIT}"
+            }
+        }
+
+        stage('Verify Structure') {
+            steps {
+                sh '''
+                    test -f infrastructure/Jenkinsfile
+                    test -f services/user-service/pom.xml
+                    test -f services/user-service/mvnw
+                    test -f services/user-service/src/main/resources/db/migration/V1__initial_schema.sql
+                '''
+            }
+        }
+
+        stage('Build and Test') {
+            steps {
+                dir("${SERVICE_DIR}") {
+                    sh '''
+                        chmod +x mvnw
+                        ./mvnw -B -ntp clean verify
+                    '''
+                }
+            }
+        }
+
+        stage('Archive Application') {
+            steps {
+                archiveArtifacts(
+                    artifacts: 'services/user-service/target/*.jar',
+                    fingerprint: true,
+                    onlyIfSuccessful: true
+                )
+            }
+        }
+    }
+
+    post {
+        always {
+            junit(
+                testResults: 'services/user-service/target/surefire-reports/*.xml',
+                allowEmptyResults: true
+            )
+        }
+
+        success {
+            echo 'User service CI pipeline completed successfully.'
+        }
+
+        failure {
+            echo 'User service CI pipeline failed. Check the failed stage and test report.'
+        }
+    }
+}
