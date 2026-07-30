@@ -11,6 +11,8 @@ pipeline {
     environment {
         SERVICE_DIR = 'services/user-service'
         MAVEN_OPTS = '-Duser.timezone=UTC'
+        SPRING_PROFILES_ACTIVE = 'local'
+        DB_URL = 'jdbc:postgresql://host.docker.internal:5432/trading_db'
     }
 
     stages {
@@ -43,11 +45,19 @@ pipeline {
 
         stage('Build and Test') {
             steps {
-                dir("${SERVICE_DIR}") {
-                    sh '''
-                        chmod +x mvnw
-                        ./mvnw -B -ntp clean verify
-                    '''
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'dtp-postgres-credentials',
+                        usernameVariable: 'DB_USERNAME',
+                        passwordVariable: 'DB_PASSWORD'
+                    )
+                ]) {
+                    dir("${SERVICE_DIR}") {
+                        sh '''
+                            chmod +x mvnw
+                            ./mvnw -B -ntp clean verify
+                        '''
+                    }
                 }
             }
         }
